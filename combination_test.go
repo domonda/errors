@@ -60,4 +60,25 @@ func Test_Combine(t *testing.T) {
 
 	err = Combine(e0, nil, e2)
 	assert.EqualError(t, err, "e0\ne2")
+
+	err = Combine(e0, Combine(e1, e2))
+	assert.EqualError(t, err, "e0\ne1\ne2")
+}
+
+func Test_Uncombine(t *testing.T) {
+	var (
+		err error
+		e0  = New("e0")
+		e1  = New("e1")
+		e2  = New("e2")
+	)
+
+	err = Combine(e0, e1, e2)
+	assert.EqualError(t, err, "e0\ne1\ne2")
+
+	errs := Uncombine(err)
+	assert.Len(t, errs, 3)
+	assert.Equal(t, e0, errs[0])
+	assert.Equal(t, e1, errs[1])
+	assert.Equal(t, e2, errs[2])
 }

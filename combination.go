@@ -6,107 +6,108 @@ import (
 	"strings"
 )
 
-// Combination combines multiple errors into one.
+const multiErrorSeparator = "\n"
+
+type multiError interface {
+	Errors() []error
+}
+
+// combination combines multiple errors into one.
 // The Error method returns the strings from the individual Error methods
 // joined by the new line character '\n'.
-// Combination always has at least one error and returns the first error
+// combination always has at least one error and returns the first error
 // as result of the Cause method.
-type Combination struct {
+type combination struct {
 	errs []error
 	*stack
 }
 
-// Combine returns a Combination error for 2 or more errors which are not nil,
-// or the callstack wrapped error if only one error was passed,
+// Combine returns a combination error for 2 or more errors which are not nil,
+// or the the single error if only one error was passed,
 // or nil if zero arguments are passed or all passed errors are nil.
-// Any returned non nil error will be wrapped with a callstack,
-// independent if a single error or a Combination type is returned.
+// The returned non nil error will be wrapped with the callstack,
+// of the Combine call.
 // The Combination type's Error method returns the strings from the
 // individual Error methods joined by the new line character '\n'.
 // Note that Cause(error) can only return a single error,
-// so in case of a Combination type, Cause returns the first error.
+// so in case of a combination error, Cause returns the cause of the first error.
+// When a passed error is a combination error implementing the following interface:
+//     interface {
+//         Errors() []error
+//     }
+// then the errors are flattened to form a new combination error together
+// with the other passed errors.
 func Combine(errs ...error) error {
-	switch len(errs) {
-	case 0:
-		return nil
-	case 1:
-		return WithStackSkip(1, errs[0])
-	}
-
-	var lastNotNil error
-	numNotNil := 0
+	var flattened []error
 	for _, err := range errs {
-		if err != nil {
-			lastNotNil = err
-			numNotNil++
+		switch x := err.(type) {
+		case nil:
+			// ignore
+		case multiError:
+			flattened = append(flattened, x.Errors()...)
+		default:
+			flattened = append(flattened, x)
 		}
 	}
-	switch numNotNil {
+
+	switch len(flattened) {
 	case 0:
 		return nil
 	case 1:
-		return WithStackSkip(1, lastNotNil)
-	}
-
-	if numNotNil < len(errs) {
-		notNilErrs := make([]error, 0, numNotNil)
-		for _, err := range errs {
-			if err != nil {
-				notNilErrs = append(notNilErrs, err)
-			}
+		return &withStack{
+			flattened[0],
+			callers(0),
 		}
-		errs = notNilErrs
 	}
 
-	return &Combination{
-		errs,
+	return &combination{
+		flattened,
 		callers(0),
 	}
 }
 
-// Uncombine returns multible errors if err is a Combination type,
-// or the passed single err if was not a Combination type,
+// Uncombine returns multible errors
+// if err is a combination of multiple errors
+// detected by implementing the following interface:
+//     interface {
+//         Errors() []error
+//     }
+// It returns the passed error in a single element slice
+// if that error was not an error combination,
 // or nil if the passed error was nil.
 func Uncombine(err error) []error {
 	if err == nil {
 		return nil
 	}
-	if combo, ok := err.(*Combination); ok {
-		return combo.errs
+	if multi, ok := err.(multiError); ok {
+		return multi.Errors()
 	}
 	return []error{err}
 }
 
-func (c *Combination) Error() string {
-	if len(c.errs) == 1 {
-		return c.errs[0].Error()
-	}
-
+func (c *combination) Error() string {
 	var b strings.Builder
 	for i, err := range c.errs {
 		if i > 0 {
-			b.WriteByte('\n')
+			b.WriteString(multiErrorSeparator)
 		}
 		b.WriteString(err.Error())
 	}
 	return b.String()
 }
 
-func (c *Combination) Errors() []error {
-	return c.errs
-}
-
-func (c *Combination) Append(err error) {
-	if err != nil {
-		c.errs = append(c.errs, WithStackSkip(1, err))
+func (c *combination) Cause() error {
+	if len(c.errs) == 0 {
+		return nil
 	}
-}
-
-func (c *Combination) Cause() error {
 	return Cause(c.errs[0])
 }
 
-func (c *Combination) Format(s fmt.State, verb rune) {
+func (c *combination) Errors() []error {
+	return c.errs
+}
+
+func (c *combination) Format(s fmt.State, verb rune) {
 	switch verb {
 	case 'v':
 		if s.Flag('+') {
