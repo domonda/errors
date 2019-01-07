@@ -94,7 +94,11 @@ package errors
 import (
 	"fmt"
 	"io"
+	"reflect"
 )
+
+// Type is the reflect.Type of the builtin error interface type
+var Type = reflect.TypeOf((*error)(nil)).Elem()
 
 // New returns an error with the supplied message.
 // New also records the stack trace at the point it was called.
