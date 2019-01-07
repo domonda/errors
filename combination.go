@@ -38,17 +38,7 @@ type combination struct {
 // then the errors are flattened to form a new combination error together
 // with the other passed errors.
 func Combine(errs ...error) error {
-	var flattened []error
-	for _, err := range errs {
-		switch x := err.(type) {
-		case nil:
-			// ignore
-		case multiError:
-			flattened = append(flattened, x.Errors()...)
-		default:
-			flattened = append(flattened, x)
-		}
-	}
+	flattened := flatten(errs)
 
 	switch len(flattened) {
 	case 0:
@@ -64,6 +54,21 @@ func Combine(errs ...error) error {
 		flattened,
 		callers(0),
 	}
+}
+
+func flatten(errs []error) []error {
+	var flattened []error
+	for _, err := range errs {
+		switch x := err.(type) {
+		case nil:
+			// ignore
+		case multiError:
+			flattened = append(flattened, x.Errors()...)
+		default:
+			flattened = append(flattened, x)
+		}
+	}
+	return flattened
 }
 
 // Uncombine returns multible errors
