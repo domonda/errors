@@ -3,15 +3,8 @@ package errors_test
 import (
 	"fmt"
 
-	"github.com/pkg/errors"
+	"github.com/domonda/errors"
 )
-
-func ExampleNew() {
-	err := errors.New("whoops")
-	fmt.Println(err)
-
-	// Output: whoops
-}
 
 func ExampleNew_printf() {
 	err := errors.New("whoops")

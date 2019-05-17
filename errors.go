@@ -95,6 +95,8 @@ import (
 	"fmt"
 	"io"
 	"reflect"
+
+	"golang.org/x/xerrors"
 )
 
 // Type is the reflect.Type of the builtin error interface type
@@ -293,8 +295,8 @@ func (w *withMessage) Format(s fmt.State, verb rune) {
 }
 
 // Cause returns the underlying cause of the error, if possible.
-// An error value has a cause if it implements the following
-// interface:
+// An error value has a cause if it implements xerrors.Wrapper
+// or the following interface:
 //
 //     type causer interface {
 //            Cause() error
@@ -309,11 +311,14 @@ func Cause(err error) error {
 	}
 
 	for err != nil {
-		cause, ok := err.(causer)
-		if !ok {
+		switch e := err.(type) {
+		case causer:
+			err = e.Cause()
+		case xerrors.Wrapper:
+			err = e.Unwrap()
+		default:
 			break
 		}
-		err = cause.Cause()
 	}
 	return err
 }
