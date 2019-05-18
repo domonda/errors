@@ -95,8 +95,6 @@ import (
 	"fmt"
 	"io"
 	"reflect"
-
-	"golang.org/x/xerrors"
 )
 
 // Type is the reflect.Type of the builtin error interface type
@@ -174,7 +172,13 @@ type withStack struct {
 	*stack
 }
 
-func (w *withStack) Cause() error { return w.error }
+func (w *withStack) Cause() error {
+	return w.error
+}
+
+func (w *withStack) Unwrap() error {
+	return w.error
+}
 
 func (w *withStack) Format(s fmt.State, verb rune) {
 	switch verb {
@@ -277,8 +281,17 @@ type withMessage struct {
 	msg   string
 }
 
-func (w *withMessage) Error() string { return w.msg + ": " + w.cause.Error() }
-func (w *withMessage) Cause() error  { return w.cause }
+func (w *withMessage) Error() string {
+	return w.msg + ": " + w.cause.Error()
+}
+
+func (w *withMessage) Cause() error {
+	return w.cause
+}
+
+func (w *withMessage) Unwrap() error {
+	return w.cause
+}
 
 func (w *withMessage) Format(s fmt.State, verb rune) {
 	switch verb {
@@ -309,12 +322,15 @@ func Cause(err error) error {
 	type causer interface {
 		Cause() error
 	}
+	type wrapper interface {
+		Unwrap() error
+	}
 
 	for err != nil {
 		switch e := err.(type) {
 		case causer:
 			err = e.Cause()
-		case xerrors.Wrapper:
+		case wrapper:
 			err = e.Unwrap()
 		default:
 			break

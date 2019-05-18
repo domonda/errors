@@ -108,6 +108,10 @@ func (c *combination) Cause() error {
 	return Cause(c.errs[0])
 }
 
+func (c *combination) Unwrap() error {
+	return c.Cause()
+}
+
 func (c *combination) Errors() []error {
 	return c.errs
 }
