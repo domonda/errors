@@ -333,7 +333,7 @@ func Cause(err error) error {
 		case wrapper:
 			err = e.Unwrap()
 		default:
-			break
+			return err
 		}
 	}
 	return err
