@@ -23,6 +23,15 @@ func Test_formatResultError(t *testing.T) {
 	if result != expected {
 		t.Errorf("result `%s` != expected `%s`", result, expected)
 	}
+
+	str = "Hello World!"
+	strPtr = &str
+	uidPtr = &uid
+	result = FormatCallSignature("test", str, strPtr, uid, uidPtr, i, iPtr, interf)
+	expected = `test("Hello World!", "Hello World!", "00000000-0000-0000-0000-000000000000", "00000000-0000-0000-0000-000000000000", 0, <nil>, <nil>)`
+	if result != expected {
+		t.Errorf("result `%s` != expected `%s`", result, expected)
+	}
 }
 
 func wrappedErrorFunc() (err error) {

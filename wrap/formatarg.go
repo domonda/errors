@@ -29,17 +29,40 @@ func formatArg(arg interface{}) string {
 		return fmt.Sprintf("[]byte(%q)", a)
 	}
 
+	if v.Kind() == reflect.Ptr {
+		switch v.Elem().Kind() {
+		case reflect.Struct:
+			// handle futher down
+
+		case reflect.Func:
+			return "<func>"
+
+		case reflect.Chan:
+			return "<chan>"
+
+		case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+			// "%#v" would return hex literal
+			return fmt.Sprintf("%v", v.Elem().Interface())
+
+		default:
+			return fmt.Sprintf("%#v", v.Elem().Interface())
+		}
+	}
+
 	switch t := reflection.DerefType(v.Type()); t.Kind() {
 	case reflect.Func:
 		return "<func>"
+
 	case reflect.Chan:
 		return "<chan>"
+
 	case reflect.Struct:
 		bytes, err := json.Marshal(arg)
 		if err != nil {
 			return t.Name() + "marshaling error"
 		}
 		return t.Name() + string(bytes)
+
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
 		// "%#v" would return hex literal
 		return fmt.Sprintf("%v", arg)
