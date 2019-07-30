@@ -4,7 +4,9 @@ import (
 	"fmt"
 	"go/ast"
 	"go/parser"
+	"go/printer"
 	"go/token"
+	"os/exec"
 	"strings"
 
 	astvisit "github.com/ungerik/go-astvisit"
@@ -13,6 +15,8 @@ import (
 
 func main() {
 	packageDir := fs.File("~/go/src/github.com/domonda/Domonda/pkg/db/postgresdb")
+
+	fset := token.NewFileSet()
 
 	packageDir.ListDir(func(file fs.File) error {
 		if file.IsDir() || file.Ext() != ".go" || strings.HasSuffix(file.Name(), "_test.go") {
@@ -23,7 +27,6 @@ func main() {
 			return err
 		}
 
-		fset := token.NewFileSet()
 		f, err := parser.ParseFile(fset, file.Name(), src, parser.ParseComments)
 		if err != nil {
 			return err
@@ -32,38 +35,73 @@ func main() {
 		// ast.Print(fset, f)
 		// os.Exit(0)
 
+		hasChanges := false
+
 		visitor := &funcDeclVisitor{
 			fset: fset,
-			src:  src,
-			offs: f.Pos(),
+
+			onFuncCorrectlyWrapped: func(funcDecl *ast.FuncDecl, cursor astvisit.Cursor, deferStmt *ast.DeferStmt) {
+				// ast.Print(fset, deferStmt)
+			},
+
+			onFuncNotWrapped: func(problem string, funcDecl *ast.FuncDecl, cursor astvisit.Cursor) {
+				fmt.Printf("%s\n\t%s\n", problem, fset.Position(funcDecl.Pos()))
+				fmt.Printf("\t%s(%s)\n", funcDecl.Name.Name, strings.Join(fieldNames(funcDecl.Type.Params.List), ", "))
+			},
+
+			onFuncWronglyWrapped: func(problem string, wrappedArgs []string, funcDecl *ast.FuncDecl, cursor astvisit.Cursor, deferStmt *ast.DeferStmt, deferStmtIndex int) {
+				args := fieldNames(funcDecl.Type.Params.List)
+				fmt.Printf("%s\n\t%s\n", problem, fset.Position(funcDecl.Pos()))
+				fmt.Printf("\t%s(%s) <-> wrap(%s)\n", funcDecl.Name.Name, strings.Join(args, ", "), strings.Join(wrappedArgs, ", "))
+
+				funcDecl.Body.List[deferStmtIndex] = newWrapDeferStmt(funcDecl)
+				hasChanges = true
+			},
 		}
-		astvisit.Visit(f, visitor, nil)
-		// err = ast.Print(fset, result)
-		// if err != nil {
-		// 	return err
-		// }
+
+		result := astvisit.Visit(f, visitor, nil)
+
+		if hasChanges {
+			fmt.Println("Rewriting file:", file.LocalPath())
+
+			newFile := file // file.Dir().Join("out_" + file.Name())
+			writer, err := newFile.OpenWriter()
+			if err != nil {
+				return err
+			}
+			defer writer.Close()
+
+			err = printer.Fprint(writer, fset, result)
+			if err != nil {
+				return err
+			}
+
+			out, err := exec.Command("gofmt", "-w", newFile.LocalPath()).CombinedOutput()
+			if err != nil {
+				fmt.Println("gofmt:", string(out))
+				return err
+			}
+		}
 
 		return nil
 	})
-
 }
 
 type funcDeclVisitor struct {
 	astvisit.VisitorImpl
 
-	src  []byte
-	fset *token.FileSet
-	offs token.Pos
+	fset                   *token.FileSet
+	onFuncCorrectlyWrapped func(funcDecl *ast.FuncDecl, cursor astvisit.Cursor, deferStmt *ast.DeferStmt)
+	onFuncNotWrapped       func(problem string, funcDecl *ast.FuncDecl, cursor astvisit.Cursor)
+	onFuncWronglyWrapped   func(problem string, wrappedArgs []string, funcDecl *ast.FuncDecl, cursor astvisit.Cursor, deferStmt *ast.DeferStmt, deferStmtIndex int)
 }
-
-// func (v *funcDeclVisitor) exprString(expr ast.Expr) string {
-// 	return string(v.src[expr.Pos()-v.offs : expr.End()-v.offs])
-// }
 
 func (v *funcDeclVisitor) VisitFuncDecl(funcDecl *ast.FuncDecl, cursor astvisit.Cursor) bool {
 	if !funcDecl.Name.IsExported() {
 		return false
 	}
+
+	// TODO find wrap.ResultError without defer
 
 	resultErrorName, hasResultError := funcError(funcDecl)
 	if !hasResultError {
@@ -71,47 +109,60 @@ func (v *funcDeclVisitor) VisitFuncDecl(funcDecl *ast.FuncDecl, cursor astvisit.
 	}
 
 	if resultErrorName == "" {
-		fmt.Println("Function error is not named:", v.fset.Position(funcDecl.Pos()))
-		// fmt.Println(cursor.Path())
-		fmt.Printf("%s(%s)\n", funcDecl.Name.Name, strings.Join(fieldNames(funcDecl.Type.Params.List), ", "))
-		fmt.Println()
+		v.onFuncNotWrapped("Function error result is not named", funcDecl, cursor)
 		return false
 	}
 
 	var (
-		deferStmt   *ast.DeferStmt
-		wrappedArgs []string
+		deferStmt      *ast.DeferStmt
+		deferStmtIndex int
+		wrappedArgs    []string
 	)
-	for _, stmt := range funcDecl.Body.List {
+	for i, stmt := range funcDecl.Body.List {
 		deferStmt, wrappedArgs = asDeferWrapErrorStatement(stmt, resultErrorName)
 		if deferStmt != nil {
+			deferStmtIndex = i
 			break
 		}
 	}
 
-	params := fieldNames(funcDecl.Type.Params.List)
-
 	if deferStmt == nil {
-		fmt.Println("Function is missing error wrapping:", v.fset.Position(funcDecl.Pos()))
-		// fmt.Println(cursor.Path())
-		fmt.Printf("%s(%s)\n", funcDecl.Name.Name, strings.Join(params, ", "))
-		fmt.Println()
+		v.onFuncNotWrapped("Function is missing error wrapping", funcDecl, cursor)
 		return false
 	}
 
-	if !equalStrings(params, wrappedArgs) {
-		fmt.Println("Different functions args:", v.fset.Position(funcDecl.Pos()))
-		fmt.Printf("%s(%s) <-> wrap(%s)\n", funcDecl.Name.Name, strings.Join(params, ", "), strings.Join(wrappedArgs, ", "))
-		// fmt.Println(cursor.Path())
-		// fmt.Printf("%s(%s)\n", funcDecl.Name.Name, strings.Join(params, ", "))
-		fmt.Println()
+	args := fieldNames(funcDecl.Type.Params.List)
+	if !equalStrings(args, wrappedArgs) {
+		v.onFuncWronglyWrapped("Different functions args", wrappedArgs, funcDecl, cursor, deferStmt, deferStmtIndex)
 		return false
 	}
 
 	// ast.Print(v.fset, stmt)
 	// os.Exit(0)
 
+	v.onFuncCorrectlyWrapped(funcDecl, cursor, deferStmt)
 	return false
+}
+
+func newWrapDeferStmt(funcDecl *ast.FuncDecl) *ast.DeferStmt {
+	paramNames := fieldNames(funcDecl.Type.Params.List)
+	errName, hasErr := funcError(funcDecl)
+	if errName == "" || !hasErr {
+		panic("function has not named error result")
+	}
+	s := &ast.DeferStmt{
+		Call: &ast.CallExpr{
+			Fun: &ast.SelectorExpr{X: &ast.Ident{Name: "wrap"}, Sel: &ast.Ident{Name: "ResultError"}},
+			Args: []ast.Expr{
+				&ast.UnaryExpr{Op: token.AND, X: &ast.Ident{Name: errName}},
+				&ast.BasicLit{Kind: token.STRING, Value: `"` + funcDecl.Name.Name + `"`},
+			},
+		},
+	}
+	for _, arg := range paramNames {
+		s.Call.Args = append(s.Call.Args, &ast.Ident{Name: arg})
+	}
+	return s
 }
 
 func funcError(funcDecl *ast.FuncDecl) (name string, hasErr bool) {
