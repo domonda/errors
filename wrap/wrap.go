@@ -6,9 +6,12 @@ import (
 	"strings"
 	"time"
 
-	l "github.com/domonda/Domonda/pkg/logger/log"
 	"github.com/domonda/errors"
 )
+
+type Logger interface {
+	Printf(format string, args ...interface{})
+}
 
 func Error(err error, funcName string, funcArgs ...interface{}) error {
 	if err == nil {
@@ -34,15 +37,10 @@ func RecoverPanicAsResultError(errPtr *error, funcName string, funcArgs ...inter
 
 	err = errors.WrapSkip(1, err, callSignature(funcName, funcArgs))
 
-	if *errPtr != nil {
-		// Log an error that will be overwritten
-		log.Error().Err(*errPtr).Msg("PanicAsResultError overwrites this error already in the result variable")
-	}
-
-	*errPtr = err
+	*errPtr = errors.Combine(err, *errPtr)
 }
 
-func LogPanic(logger *l.LevelLogger, funcName string, funcArgs ...interface{}) {
+func LogPanic(log Logger, funcName string, funcArgs ...interface{}) {
 	p := recover()
 	if p == nil {
 		return
@@ -50,12 +48,12 @@ func LogPanic(logger *l.LevelLogger, funcName string, funcArgs ...interface{}) {
 
 	err := errors.WrapSkip(1, AsError(p), callSignature(funcName, funcArgs))
 
-	logger.Error().Err(err).Msg("LogPanic")
+	log.Printf("LogPanic: %w", err)
 
 	panic(p)
 }
 
-func RecoverAndLogPanic(logger *l.LevelLogger, funcName string, funcArgs ...interface{}) {
+func RecoverAndLogPanic(log Logger, funcName string, funcArgs ...interface{}) {
 	err := AsError(recover())
 	if err == nil {
 		return
@@ -63,7 +61,7 @@ func RecoverAndLogPanic(logger *l.LevelLogger, funcName string, funcArgs ...inte
 
 	err = errors.WrapSkip(1, err, callSignature(funcName, funcArgs))
 
-	logger.Error().Err(err).Msg("RecoverAndLogPanic")
+	log.Printf("RecoverAndLogPanic: %w", err)
 }
 
 func AsError(val interface{}) error {
