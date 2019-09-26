@@ -1,5 +1,5 @@
 language: go
-go_import_path: github.com/pkg/errors
+go_import_path: github.com/domonda/errors
 go:
   - 1.4.x
   - 1.5.x
