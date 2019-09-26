@@ -113,7 +113,7 @@ func (c *combination) Unwrap() error {
 	switch len(c.errs) {
 	case 0:
 		return nil
-	case 1:
+	case 1, 2:
 		return c.errs[0]
 	default:
 		return &combination{
