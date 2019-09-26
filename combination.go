@@ -1,6 +1,7 @@
 package errors
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -109,7 +110,26 @@ func (c *combination) Cause() error {
 }
 
 func (c *combination) Unwrap() error {
-	return c.Cause()
+	switch len(c.errs) {
+	case 0:
+		return nil
+	case 1:
+		return c.errs[0]
+	default:
+		return &combination{
+			errs:  c.errs[:len(c.errs)-1],
+			stack: c.stack,
+		}
+	}
+}
+
+func (c *combination) Is(target error) bool {
+	for _, err := range c.errs {
+		if errors.Is(err, target) {
+			return true
+		}
+	}
+	return false
 }
 
 func (c *combination) Errors() []error {
