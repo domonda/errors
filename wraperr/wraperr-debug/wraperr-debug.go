@@ -1,10 +1,8 @@
-package wraperr_test
+package main
 
 import (
+	"errors"
 	"fmt"
-	"testing"
-
-	"github.com/stretchr/testify/assert"
 
 	"github.com/domonda/errors/wraperr"
 )
@@ -24,14 +22,11 @@ func funcB(s ...string) (err error) {
 func funcC() (err error) {
 	defer wraperr.Result(&err)
 
-	return wraperr.New("error in funcC")
+	return errors.New("error in funcC")
 }
 
-func Test_Resul(t *testing.T) {
+func main() {
 	err := funcA(666, "Hello World!")
-	assert.Error(t, err, "test error")
-
 	str := err.Error()
 	fmt.Println(str)
-	t.Fail() // to see Println above
 }
