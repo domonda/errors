@@ -37,8 +37,6 @@ func ExampleWithCallParams() {
 
 	// Output:
 	// error in funcC
-	// github.com/domonda/errors/wraperr.funcC
-	//     github.com/domonda/errors/wraperr/withstackparams_test.go:24
 	// github.com/domonda/errors/wraperr.funcC()
 	//     github.com/domonda/errors/wraperr/withstackparams_test.go:24
 	// github.com/domonda/errors/wraperr.funcB([]string{"Hello World!"})

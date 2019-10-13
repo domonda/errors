@@ -7,10 +7,7 @@ import (
 )
 
 func WithStack(err error) error {
-	return &withStack{
-		err:   err,
-		stack: callStack(1),
-	}
+	return WithStackSkip(1, err)
 }
 
 func WithStackSkip(skip int, err error) error {
@@ -21,20 +18,15 @@ func WithStackSkip(skip int, err error) error {
 }
 
 func New(text string) error {
-	return &withStack{
-		err:   errors.New(text),
-		stack: callStack(1),
-	}
+	return WithStackSkip(1, errors.New(text))
 }
 
 func Errorf(format string, a ...interface{}) error {
-	return &withStack{
-		err:   fmt.Errorf(format, a...),
-		stack: callStack(1),
-	}
+	return WithStackSkip(1, fmt.Errorf(format, a...))
 }
 
 type callStackProvider interface {
+	Unwrap() error
 	CallStack() []uintptr
 }
 

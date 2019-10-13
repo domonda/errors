@@ -7,8 +7,6 @@ import (
 	"reflect"
 	"runtime"
 	"strings"
-
-	reflection "github.com/ungerik/go-reflection"
 )
 
 func formatError(err error) string {
@@ -20,10 +18,10 @@ func formatError(err error) string {
 	for err != nil {
 		switch e := err.(type) {
 		case callStackParamsProvider:
-			calls = append(calls, formatCallParamsSource(e.CallStackParams()))
+			calls = append(calls, formatCallStackParams(e))
 
 		case callStackProvider:
-			calls = append(calls, formatCallSource(e.CallStack()))
+			calls = append(calls, formatCallStack(e))
 
 		default:
 			if firstWithoutStack == nil {
@@ -42,15 +40,8 @@ func formatError(err error) string {
 	return b.String()
 }
 
-// func formatCall(stack []uintptr) string {
-// 	frame, ok := runtime.CallersFrames(stack).Next()
-// 	if !ok {
-// 		return "insufficient call stack"
-// 	}
-// 	return fmt.Sprintf("%s", frame.Function)
-// }
-
-func formatCallSource(stack []uintptr) string {
+func formatCallStack(e callStackProvider) string {
+	stack := e.CallStack()
 	frame, ok := runtime.CallersFrames(stack).Next()
 	if !ok {
 		return "insufficient call stack"
@@ -58,15 +49,8 @@ func formatCallSource(stack []uintptr) string {
 	return fmt.Sprintf("%s\n    %s:%d", frame.Function, frame.File, frame.Line)
 }
 
-// func formatCallParams(stack []uintptr, params []interface{}) string {
-// 	frame, ok := runtime.CallersFrames(stack).Next()
-// 	if !ok {
-// 		return "insufficient call stack"
-// 	}
-// 	return fmt.Sprintf("%s(%s)", frame.Function, formatParams(params))
-// }
-
-func formatCallParamsSource(stack []uintptr, params []interface{}) string {
+func formatCallStackParams(e callStackParamsProvider) string {
+	stack, params := e.CallStackParams()
 	frame, ok := runtime.CallersFrames(stack).Next()
 	if !ok {
 		return "insufficient call stack"
@@ -86,19 +70,18 @@ func formatParams(params []interface{}) string {
 }
 
 func formatParam(param interface{}) string {
-	if param == nil {
-		return "<nil>"
-	}
 	v := reflect.ValueOf(param)
-	if reflection.IsNil(v) {
+	if isNil(v) {
 		return "<nil>"
 	}
 
 	switch a := param.(type) {
 	case error:
 		return fmt.Sprintf("error(%q)", a.Error())
+
 	case fmt.Stringer:
 		return fmt.Sprintf("%q", a.String())
+
 	case []byte:
 		if len(a) > 300 {
 			return fmt.Sprintf("[%d]byte(%q...)", len(a), a[:10])
@@ -119,14 +102,14 @@ func formatParam(param interface{}) string {
 
 		case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
 			// "%#v" would return hex literal
-			return fmt.Sprintf("%v", v.Elem().Interface())
+			return fmt.Sprintf("%d", v.Elem().Interface())
 
 		default:
 			return fmt.Sprintf("%#v", v.Elem().Interface())
 		}
 	}
 
-	switch t := reflection.DerefType(v.Type()); t.Kind() {
+	switch t := derefType(v.Type()); t.Kind() {
 	case reflect.Func:
 		return "<func>"
 
@@ -142,8 +125,31 @@ func formatParam(param interface{}) string {
 
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
 		// "%#v" would return hex literal
-		return fmt.Sprintf("%v", param)
-	}
+		return fmt.Sprintf("%d", param)
 
-	return fmt.Sprintf("%#v", param)
+	default:
+		return fmt.Sprintf("%#v", param)
+	}
+}
+
+// isNil returns if val is of a type that can be nil and if it is nil.
+// Unlike reflect.Value.IsNil() it is safe to call this function for any value and type.
+// The zero value of reflect.Value will yield true
+// because it can be the result of reflect.ValueOf(nil)
+func isNil(v reflect.Value) bool {
+	if !v.IsValid() {
+		return true
+	}
+	switch v.Kind() {
+	case reflect.Chan, reflect.Func, reflect.Map, reflect.Ptr, reflect.Interface, reflect.Slice:
+		return v.IsNil()
+	}
+	return false
+}
+
+func derefType(t reflect.Type) reflect.Type {
+	for t.Kind() == reflect.Ptr {
+		t = t.Elem()
+	}
+	return t
 }
