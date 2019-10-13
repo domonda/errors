@@ -8,19 +8,19 @@ import (
 )
 
 func funcA(i int, s string) (err error) {
-	defer wraperr.Result(&err, i, s)
+	defer wraperr.WithCallParams(&err, i, s)
 
 	return funcB(s)
 }
 
 func funcB(s ...string) (err error) {
-	defer wraperr.Result(&err, s)
+	defer wraperr.WithCallParams(&err, s)
 
 	return funcC()
 }
 
 func funcC() (err error) {
-	defer wraperr.Result(&err)
+	defer wraperr.WithCallParams(&err)
 
 	return errors.New("error in funcC")
 }

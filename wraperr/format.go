@@ -55,7 +55,7 @@ func formatCallSource(stack []uintptr) string {
 	if !ok {
 		return "insufficient call stack"
 	}
-	return fmt.Sprintf("%s\n\t%s:%d", frame.Function, frame.File, frame.Line)
+	return fmt.Sprintf("%s\n    %s:%d", frame.Function, frame.File, frame.Line)
 }
 
 // func formatCallParams(stack []uintptr, params []interface{}) string {
@@ -71,7 +71,7 @@ func formatCallParamsSource(stack []uintptr, params []interface{}) string {
 	if !ok {
 		return "insufficient call stack"
 	}
-	return fmt.Sprintf("%s(%s)\n\t%s:%d", frame.Function, formatParams(params), frame.File, frame.Line)
+	return fmt.Sprintf("%s(%s)\n    %s:%d", frame.Function, formatParams(params), frame.File, frame.Line)
 }
 
 func formatParams(params []interface{}) string {
