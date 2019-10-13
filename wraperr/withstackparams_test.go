@@ -7,19 +7,19 @@ import (
 )
 
 func funcA(i int, s string) (err error) {
-	defer WithCallParams(&err, i, s)
+	defer WithFuncParams(&err, i, s)
 
 	return funcB(s)
 }
 
 func funcB(s ...string) (err error) {
-	defer WithCallParams(&err, s)
+	defer WithFuncParams(&err, s)
 
 	return funcC()
 }
 
 func funcC() (err error) {
-	defer WithCallParams(&err)
+	defer WithFuncParams(&err)
 
 	return New("error in funcC")
 }
@@ -29,7 +29,7 @@ func basePath() string {
 	return file[:strings.Index(file, "github.com")]
 }
 
-func ExampleWithCallParams() {
+func ExampleWithFuncParams() {
 	err := funcA(666, "Hello World!")
 	errStr := err.Error()
 	errStr = strings.ReplaceAll(errStr, basePath(), "")
