@@ -11,8 +11,8 @@ import (
 
 func formatError(err error) string {
 	var (
-		calls             []string
 		firstWithoutStack error
+		calls             []string
 	)
 
 	for err != nil {
@@ -30,6 +30,11 @@ func formatError(err error) string {
 		}
 
 		err = errors.Unwrap(err)
+	}
+
+	if firstWithoutStack == nil {
+		// Should never happen, just to make sure we don't panic
+		firstWithoutStack = errors.New("wraperr: no wrapped error found")
 	}
 
 	var b strings.Builder
