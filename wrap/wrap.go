@@ -48,7 +48,7 @@ func LogPanic(log Logger, funcName string, funcArgs ...interface{}) {
 
 	err := errors.WrapSkip(1, AsError(p), callSignature(funcName, funcArgs))
 
-	log.Printf("LogPanic: %w", err)
+	log.Printf("LogPanic: %+v", err)
 
 	panic(p)
 }
@@ -61,7 +61,7 @@ func RecoverAndLogPanic(log Logger, funcName string, funcArgs ...interface{}) {
 
 	err = errors.WrapSkip(1, err, callSignature(funcName, funcArgs))
 
-	log.Printf("RecoverAndLogPanic: %w", err)
+	log.Printf("RecoverAndLogPanic: %+v", err)
 }
 
 func AsError(val interface{}) error {
